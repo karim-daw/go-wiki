@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -22,31 +21,6 @@ func (p *Page) save() error {
     return os.WriteFile(filename, p.Body, 0600)
 }
 
-// global variable that holds all templates
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
-
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-    err := templates.ExecuteTemplate(w, tmpl + ".html", p)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-}
-
-// global variable to store validation expression
-var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
-
-
-// function that uses the validPath expression to validate path and extract the page title
-func getTitle(w http.ResponseWriter, r *http.Request) (string, error) {
-    stringMatch := validPath.FindStringSubmatch(r.URL.Path)
-    if stringMatch == nil {
-        http.NotFound(w, r)
-        return "", errors.New("invalid Page Title")
-    }
-    return stringMatch[2], nil // The title is the second subexpression.
-}
-
-
 // loadPage will return a pointer to a page struct based on
 // the pages title string
 func loadPage(title string) (*Page, error) {
@@ -58,22 +32,13 @@ func loadPage(title string) (*Page, error) {
     return &Page{Title: title, Body: body}, nil
 }
 
-
 // handle root
 func handler(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 }
 
-// handle view end point
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-
-	// extract  page title with getTitle function
-    title, err := getTitle(w, r)
-    if err != nil {
-        return
-    }
-
-	// load page data and format with html 
+// handle view end point of wiki pages
+func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
     p, err := loadPage(title)
     if err != nil {
         http.Redirect(w, r, "/edit/"+title, http.StatusFound)
@@ -82,15 +47,8 @@ func viewHandler(w http.ResponseWriter, r *http.Request) {
     renderTemplate(w, "view", p)
 }
 
-
-func editHandler(w http.ResponseWriter, r *http.Request) {
-	
-	// extract  page title with getTitle function
-    title, err := getTitle(w, r)
-    if err != nil {
-        return
-    }
-
+// handle edit endpoint where editing wiki page is possible
+func editHandler(w http.ResponseWriter, r *http.Request, title string) {
     p, err := loadPage(title)
     if err != nil {
         p = &Page{Title: title}
@@ -99,21 +57,11 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-func saveHandler(w http.ResponseWriter, r *http.Request){
-
-	// extract  page title with getTitle function
-    title, err := getTitle(w, r)
-    if err != nil {
-        return
-    }
-
+// convert string from body to bytes and save page, then redirect to page
+func saveHandler(w http.ResponseWriter, r *http.Request, title string){
     body := r.FormValue("body")
-
-    // convert string from body to bytes
     p := &Page{Title: title, Body: []byte(body)}
-
-    err = p.save()
-
+    err := p.save()
     if err != nil{
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
@@ -121,7 +69,30 @@ func saveHandler(w http.ResponseWriter, r *http.Request){
     http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
+// global variable that holds all templates
+var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
 
+// function that executes template string for page struct and writes it out as response
+func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
+    err := templates.ExecuteTemplate(w, tmpl + ".html", p)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
+}
+
+// global variable to store validation expression
+var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
+
+func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		m := validPath.FindStringSubmatch(r.URL.Path)
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		fn(w, r, m[2])
+	}
+}
 
 func main() {
 
@@ -129,9 +100,9 @@ func main() {
     p1.save()
 
     http.HandleFunc("/", handler)
-	http.HandleFunc("/view/", viewHandler)
-	http.HandleFunc("/edit/", editHandler)
-    http.HandleFunc("/save/", saveHandler)
+	http.HandleFunc("/view/", makeHandler(viewHandler))
+	http.HandleFunc("/edit/", makeHandler(editHandler))
+    http.HandleFunc("/save/", makeHandler(saveHandler))
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
