@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 )
 
 
@@ -14,10 +16,36 @@ type Page struct {
     Body  []byte
 }
 
+// write to a file given a page struct, returns error
 func (p *Page) save() error {
     filename := p.Title + ".txt"
     return os.WriteFile(filename, p.Body, 0600)
 }
+
+// global variable that holds all templates
+var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+
+func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
+    err := templates.ExecuteTemplate(w, tmpl + ".html", p)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
+}
+
+// global variable to store validation expression
+var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
+
+
+// function that uses the validPath expression to validate path and extract the page title
+func getTitle(w http.ResponseWriter, r *http.Request) (string, error) {
+    stringMatch := validPath.FindStringSubmatch(r.URL.Path)
+    if stringMatch == nil {
+        http.NotFound(w, r)
+        return "", errors.New("invalid Page Title")
+    }
+    return stringMatch[2], nil // The title is the second subexpression.
+}
+
 
 // loadPage will return a pointer to a page struct based on
 // the pages title string
@@ -36,12 +64,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 }
 
-
 // handle view end point
 func viewHandler(w http.ResponseWriter, r *http.Request) {
 
-	// extract  page title from r.URL.Path
-    title := r.URL.Path[len("/view/"):]
+	// extract  page title with getTitle function
+    title, err := getTitle(w, r)
+    if err != nil {
+        return
+    }
 
 	// load page data and format with html 
     p, err := loadPage(title)
@@ -55,9 +85,12 @@ func viewHandler(w http.ResponseWriter, r *http.Request) {
 
 func editHandler(w http.ResponseWriter, r *http.Request) {
 	
-	// extract  page title from r.URL.Path
-    // load page data and format with html 
-    title := r.URL.Path[len("/edit/"):]
+	// extract  page title with getTitle function
+    title, err := getTitle(w, r)
+    if err != nil {
+        return
+    }
+
     p, err := loadPage(title)
     if err != nil {
         p = &Page{Title: title}
@@ -68,14 +101,19 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 
 func saveHandler(w http.ResponseWriter, r *http.Request){
 
-    // get string body from form value and turn into page struct
-    title := r.URL.Path[len("/save/"):]
+	// extract  page title with getTitle function
+    title, err := getTitle(w, r)
+    if err != nil {
+        return
+    }
+
     body := r.FormValue("body")
 
     // convert string from body to bytes
     p := &Page{Title: title, Body: []byte(body)}
 
-    err := p.save()
+    err = p.save()
+
     if err != nil{
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
@@ -83,16 +121,6 @@ func saveHandler(w http.ResponseWriter, r *http.Request){
     http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
-
-// global variable that holds all templates
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
-
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-    err := templates.ExecuteTemplate(w, tmpl + ".html", p)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-}
 
 
 func main() {
