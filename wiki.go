@@ -1,24 +1,25 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"net/http"
 	"os"
 )
 
-// A wiki has a title and a body (the page content).
-// The Body element is a []byte rather than string because that is expected by the io libraries
+
 type Page struct {
     Title string
     Body  []byte
 }
 
-// This is a method named save that takes as its receiver
-// p, a pointer to Page . It takes no parameters, and returns a value of type error
-func (page *Page) save() error {
-    filename := page.Title + ".txt"
-    return os.WriteFile(filename, page.Body, 0600)
+func (p *Page) save() error {
+    filename := p.Title + ".txt"
+    return os.WriteFile(filename, p.Body, 0600)
 }
 
-// method loads a page if it exists, if not, returns error
+// loadPage will return a pointer to a page struct based on
+// the pages title string
 func loadPage(title string) (*Page, error) {
     filename := title + ".txt"
     body, err := os.ReadFile(filename)
@@ -28,9 +29,56 @@ func loadPage(title string) (*Page, error) {
     return &Page{Title: title, Body: body}, nil
 }
 
-func main() {
-    page1 := &Page{Title: "TestPage", Body: []byte("This is a sample Page.")}
-    page1.save()
-    // page2, _ := loadPage("TestPage")
-    // fmt.Println(string(page2.Body))
+
+// handle root
+func handler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 }
+
+
+// handle view end point
+func viewHandler(w http.ResponseWriter, r *http.Request) {
+
+	// extract  page title from r.URL.Path
+    title := r.URL.Path[len("/view/"):]
+
+	// load page data and format with html 
+    p, _ := loadPage(title)
+    fmt.Fprintf(w, "<h1>%s</h1><div>%s</div>", p.Title, p.Body)
+}
+
+
+func editHandler(w http.ResponseWriter, r *http.Request) {
+	
+	// extract  page title from r.URL.Path
+    title := r.URL.Path[len("/edit/"):]
+
+    // load page data and format with html 
+    p, err := loadPage(title)
+
+    // handle error
+    if err != nil {
+        p = &Page{Title: title}
+    }
+    
+    fmt.Fprintf(w, "<h1>Editing %s</h1>"+
+        "<form action=\"/save/%s\" method=\"POST\">"+
+        "<textarea name=\"body\">%s</textarea><br>"+
+        "<input type=\"submit\" value=\"Save\">"+
+        "</form>",
+        p.Title, p.Title, p.Body)
+}
+
+
+func main() {
+
+	p1 := &Page{Title: "TestPage", Body: []byte("This is a sample Page.")}
+    p1.save()
+
+    http.HandleFunc("/", handler)
+	http.HandleFunc("/view/", viewHandler)
+	http.HandleFunc("/edit/", editHandler)
+    http.HandleFunc("/save/", saveHandler)
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
