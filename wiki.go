@@ -9,7 +9,6 @@ import (
 	"regexp"
 )
 
-
 type Page struct {
     Title string
     Body  []byte
@@ -21,8 +20,8 @@ func (p *Page) save() error {
     return os.WriteFile(filename, p.Body, 0600)
 }
 
-// loadPage will return a pointer to a page struct based on
-// the pages title string
+// loadPage will return a pointer to a page struct
+// based on the pages title string
 func loadPage(title string) (*Page, error) {
     filename := title + ".txt"
     body, err := os.ReadFile(filename)
@@ -95,9 +94,6 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 }
 
 func main() {
-
-	p1 := &Page{Title: "TestPage", Body: []byte("This is a sample Page.")}
-    p1.save()
 
     http.HandleFunc("/", handler)
 	http.HandleFunc("/view/", makeHandler(viewHandler))
