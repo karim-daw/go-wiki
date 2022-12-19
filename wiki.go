@@ -74,14 +74,24 @@ func saveHandler(w http.ResponseWriter, r *http.Request){
 
     // convert string from body to bytes
     p := &Page{Title: title, Body: []byte(body)}
-    p.save()
+
+    err := p.save()
+    if err != nil{
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
     http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
 
+// global variable that holds all templates
+var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+
 func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-    t, _ := template.ParseFiles(tmpl + ".html")
-    t.Execute(w, p)
+    err := templates.ExecuteTemplate(w, tmpl + ".html", p)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
 }
 
 
