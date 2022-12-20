@@ -16,8 +16,13 @@ type Page struct {
 
 // write to a file given a page struct, returns error
 func (p *Page) save() error {
-    filename := p.Title + ".txt"
-    return os.WriteFile(filename, p.Body, 0600)
+    dir := "data"
+    filename := dir + "/" + p.Title + ".txt"
+    err := os.Mkdir(dir,0750)
+    if err != nil && !os.IsExist(err) {
+		log.Fatal(err)
+	}
+    return os.WriteFile(dir + "/" + filename, p.Body, 0600)
 }
 
 // loadPage will return a pointer to a page struct
@@ -69,7 +74,7 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string){
 }
 
 // global variable that holds all templates
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+var templates = template.Must(template.ParseFiles("templates/edit.html", "templates/view.html"))
 
 // function that executes template string for page struct and writes it out as response
 func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
