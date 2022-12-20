@@ -14,21 +14,23 @@ type Page struct {
     Body  []byte
 }
 
+// data directory name
+var dir = "data"
+
 // write to a file given a page struct, returns error
 func (p *Page) save() error {
-    dir := "data"
     filename := dir + "/" + p.Title + ".txt"
     err := os.Mkdir(dir,0750)
     if err != nil && !os.IsExist(err) {
 		log.Fatal(err)
 	}
-    return os.WriteFile(dir + "/" + filename, p.Body, 0600)
+    return os.WriteFile(filename, p.Body, 0600)
 }
 
 // loadPage will return a pointer to a page struct
 // based on the pages title string
 func loadPage(title string) (*Page, error) {
-    filename := title + ".txt"
+    filename := dir + "/" + title + ".txt"
     body, err := os.ReadFile(filename)
     if err != nil {
         return nil, err
